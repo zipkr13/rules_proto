@@ -196,11 +196,6 @@ def _get_proto_filename(src):
         return "/".join(parts[2:])
     return src.short_path
 
-def _strip_virtual_import(path):
-    pos = path.find(_VIRTUAL_IMPORTS)
-    path = path[pos + len(_VIRTUAL_IMPORTS):]
-    return path.split("/", 1)[-1]
-
 def copy_proto(ctx, descriptor, src):
     """Copy a proto to the 'staging area'
 
@@ -213,17 +208,11 @@ def copy_proto(ctx, descriptor, src):
       <Generated File> for the copied .proto
     """
     proto = ctx.actions.declare_file(_get_proto_filename(src), sibling = descriptor)
-    if is_in_virtual_imports(src):
-        proto_rpath = _strip_virtual_import(src.path)
-    else:
-        proto_rpath = _get_proto_filename(src)
-    proto_copy_path = "/".join([descriptor.dirname, proto_rpath])
-    proto = ctx.actions.declare_file(proto_rpath, sibling = descriptor)
     ctx.actions.run_shell(
         mnemonic = "CopyProto",
         inputs = [src],
         outputs = [proto],
-        command = "cp %s %s" % (src.path, proto_copy_path),
+        command = "cp %s %s" % (src.path, proto.path),
     )
     return proto
 
@@ -711,20 +700,3 @@ def invoke_transitive(proto_compile_rule, name_suffix, kwargs):
     )
 
     return rule_name
-
-# From https://github.com/grpc/grpc/blob/2e7d6b94eaf6b0e11add27606b4fe3d0b7216154/bazel/protobuf.bzl:
-_VIRTUAL_IMPORTS = "/_virtual_imports/"
-
-def is_in_virtual_imports(source_file, virtual_folder = _VIRTUAL_IMPORTS):
-    """Determines if source_file is virtual (is placed in _virtual_imports
-    subdirectory). The output of all proto_library targets which use
-    import_prefix  and/or strip_import_prefix arguments is placed under
-    _virtual_imports directory.
-    Args:
-        source_file: A proto file.
-        virtual_folder: The virtual folder name (is set to "_virtual_imports"
-            by default)
-    Returns:
-        True if source_file is located under _virtual_imports, False otherwise.
-    """
-    return not source_file.is_source and virtual_folder in source_file.path
